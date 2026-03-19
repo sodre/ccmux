@@ -1,0 +1,121 @@
+#!/usr/bin/env zsh
+# cc — create or attach to a Claude Code tmux session
+#
+# Usage: cc [--no-attach] <project-path> [worktree-name]
+
+set -euo pipefail
+
+# --- Flags ---
+NO_ATTACH=false
+if [[ "${1:-}" == "--no-attach" ]]; then
+  NO_ATTACH=true
+  shift
+fi
+
+# --- Validation ---
+if [[ $# -lt 1 ]]; then
+  echo "Usage: cc [--no-attach] <project-path> [worktree-name]" >&2
+  exit 1
+fi
+
+if [[ "$TERM_PROGRAM" != "iTerm.app" ]] && [[ "$NO_ATTACH" == false ]]; then
+  echo "Error: cc must be run from within iTerm2 (tmux -CC requires iTerm2)." >&2
+  exit 1
+fi
+
+PROJECT_PATH="${1:A}"  # Resolve to absolute path
+WORKTREE_NAME="${2:-}"
+
+# --- Derive session name ---
+SESSION_NAME="${PROJECT_PATH:t}"  # basename
+
+# --- Ensure home session exists ---
+if ! tmux has-session -t "home" 2>/dev/null; then
+  SCRIPT_DIR="${0:A:h}"
+  tmux new-session -d -s "home" -n "dashboard" -x 200 -y 50
+  tmux send-keys -t "home:dashboard" "while true; do clear; $SCRIPT_DIR/cc-dashboard; sleep 30; done" Enter
+fi
+
+# --- Helper: check if -CC client is attached to session ---
+has_cc_client() {
+  local session="$1"
+  tmux list-clients -t "$session" -F '#{client_control_mode}' 2>/dev/null | grep -q '^1$'
+}
+
+# --- Helper: attach to session via -CC (or skip if --no-attach) ---
+attach_session() {
+  local session="$1"
+  if [[ "$NO_ATTACH" == true ]]; then
+    echo "Session '$session' ready. Use tmux -CC attach -t '$session' to connect."
+    return 0
+  fi
+  if has_cc_client "$session"; then
+    echo "Session '$session' already has an iTerm2 window. Use Cmd+\` to switch to it."
+    return 0
+  fi
+  exec tmux -CC attach -t "$session"
+}
+
+# --- Helper: create a window with claude|shell split ---
+create_split_window() {
+  local session="$1"
+  local window_name="$2"
+  local work_dir="$3"
+  local is_initial="${4:-false}"  # true when called for the first window after new-session
+
+  # Check if window already exists — idempotent
+  if tmux list-windows -t "$session" -F '#{window_name}' 2>/dev/null | grep -q "^${window_name}$"; then
+    return 0
+  fi
+
+  if [[ "$is_initial" == true ]]; then
+    # Rename the default window created by new-session (index 0)
+    tmux rename-window -t "${session}:0" "$window_name"
+  else
+    # Create a new window
+    tmux new-window -t "$session" -n "$window_name" -c "$work_dir"
+  fi
+
+  # Split: left pane = claude, right pane = shell
+  tmux split-window -t "${session}:${window_name}" -h -c "$work_dir"
+
+  # Left pane (pane 0) runs claude, right pane (pane 1) is shell
+  tmux send-keys -t "${session}:${window_name}.0" "cd ${(q)work_dir} && claude" Enter
+  tmux send-keys -t "${session}:${window_name}.1" "cd ${(q)work_dir}" Enter
+
+  # Focus left pane
+  tmux select-pane -t "${session}:${window_name}.0"
+}
+
+# --- Main logic ---
+if [[ -z "$WORKTREE_NAME" ]]; then
+  # No worktree — open main branch
+  if ! tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+    # Create new session
+    tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_PATH" -x 200 -y 50
+    create_split_window "$SESSION_NAME" "main" "$PROJECT_PATH" true
+  fi
+  # Session exists (or was just created) — attach
+  attach_session "$SESSION_NAME"
+else
+  # Worktree mode
+  WORKTREE_DIR="${PROJECT_PATH:h}/${SESSION_NAME}-${WORKTREE_NAME}"
+
+  # Create git worktree if it doesn't exist
+  if [[ ! -d "$WORKTREE_DIR" ]]; then
+    git -C "$PROJECT_PATH" worktree add "$WORKTREE_DIR" -b "$WORKTREE_NAME" 2>/dev/null \
+      || git -C "$PROJECT_PATH" worktree add "$WORKTREE_DIR" "$WORKTREE_NAME"
+  fi
+
+  # Ensure session exists
+  if ! tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+    tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_PATH" -x 200 -y 50
+    create_split_window "$SESSION_NAME" "main" "$PROJECT_PATH" true
+  fi
+
+  # Create worktree window (not initial — uses new-window)
+  create_split_window "$SESSION_NAME" "$WORKTREE_NAME" "$WORKTREE_DIR"
+
+  # Attach
+  attach_session "$SESSION_NAME"
+fi
