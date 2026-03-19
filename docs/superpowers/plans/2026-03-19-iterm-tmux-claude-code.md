@@ -81,6 +81,8 @@ create_test_project() {
   local dir="$TEST_TMP/$name"
   mkdir -p "$dir"
   git -C "$dir" init --quiet
+  git -C "$dir" config user.email "test@test.local"
+  git -C "$dir" config user.name "Test"
   git -C "$dir" commit --allow-empty -m "init" --quiet
   echo "$dir"
 }
@@ -746,9 +748,9 @@ get_worktree_path() {
 
   # Check if this path is a git worktree (not the main repo)
   local git_common_dir
-  git_common_dir=$(git -C "$pane_path" rev-parse --git-common-dir 2>/dev/null) || return 1
+  git_common_dir=$(git -C "$pane_path" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
   local git_dir
-  git_dir=$(git -C "$pane_path" rev-parse --git-dir 2>/dev/null) || return 1
+  git_dir=$(git -C "$pane_path" rev-parse --path-format=absolute --git-dir 2>/dev/null) || return 1
 
   # If git-dir != git-common-dir, this is a worktree
   if [[ "$git_dir" != "$git_common_dir" ]]; then
