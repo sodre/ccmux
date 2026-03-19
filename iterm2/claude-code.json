@@ -4,7 +4,7 @@
       "Name": "Claude Code",
       "Guid": "claude-code-tmux-home",
       "Custom Command": "Yes",
-      "Command": "tmux -CC attach -t home 2>/dev/null || echo 'No home session found. Run ccmux <project-path> first to create one.'",
+      "Command": "tmux -CC new-session -A -s home -n dashboard",
       "Tags": ["claude", "tmux"],
       "Unlimited Scrollback": true,
       "Background Color": {
