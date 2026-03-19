@@ -97,8 +97,8 @@ Main entry point for creating and attaching to sessions.
 
 - **No worktree-name:** Opens the main branch at the project path
   1. Derives session name from directory name
-  2. If session doesn't exist: creates tmux session, explicitly splits into two panes (claude | shell), creates "home" session if needed, opens iTerm2 via `tmux -CC attach`
-  3. If session exists and already has a "main" window: checks if a `-CC` client is already attached to this session. If yes, prints a message and exits (the iTerm2 window already exists — user can Cmd+` to it). If no `-CC` client is attached, attaches via `tmux -CC attach`.
+  2. If session doesn't exist: creates tmux session, explicitly splits into two panes (claude | shell), creates "home" session (background, no attach) if the tmux server has no "home" session yet, then opens iTerm2 via `tmux -CC attach` to the **project** session
+  3. If session exists and already has a "main" window: checks if a `-CC` client is already attached via `tmux list-clients -t <session> -F '#{client_control_mode}'` (value `1` = control-mode client). If yes, prints a message and exits (the iTerm2 window already exists — user can Cmd+` to it). If no `-CC` client is attached, attaches via `tmux -CC attach`.
   4. If session exists but no "main" window: creates the window with split, then attaches (same `-CC` client check as above)
 - **With worktree-name:** Opens an isolated worktree
   1. Creates git worktree at `../<project>-<worktree-name>` (sibling directory) if it doesn't already exist
@@ -132,12 +132,12 @@ Read-only status display used by the home session:
 A JSON profile installed to `~/Library/Application Support/iTerm2/DynamicProfiles/`:
 
 - Name: "Claude Code"
-- Initial command: attaches to home tmux session via `-CC` mode
+- Initial command: attaches to the "home" tmux session via `tmux -CC attach -t home` (creating it if needed). This is how the dashboard gets its own iTerm2 window — the user opens a new iTerm2 window/tab using the "Claude Code" profile. The `cc` script only creates the home session in the background; it does not attach to it.
 - Slightly distinct background color for visual identification
 - Unlimited scrollback (delegated to iTerm2 by `-CC` mode)
 - No custom keybindings — standard iTerm2 shortcuts (Cmd+T, Cmd+D, Cmd+number, Cmd+` for window switching)
 
-**Note:** iTerm2 DynamicProfiles directory does not reliably follow symlinks. The profile is copied (not symlinked) by `install.sh`. Run `install.sh` again after `git pull` to pick up profile changes.
+**Note:** iTerm2 DynamicProfiles does not support symlinked files — symlinks produce a "not readable" permission error (gnachman/iterm2#9107). The profile must be physically copied by `install.sh`. Run `install.sh` again after `git pull` to pick up profile changes.
 
 ### 4. Installation (`install.sh`)
 
@@ -147,6 +147,7 @@ Steps:
 3. Configure iTerm2 tmux preference: `defaults write com.googlecode.iterm2 OpenTmuxWindowsIn -int 2`
 4. Symlink `tmux.conf` → `~/.tmux.conf` (backs up existing if present)
 5. Symlink `bin/cc`, `bin/cc-list`, `bin/cc-kill`, `bin/cc-dashboard` → `~/.local/bin/`
+   - Verify `~/.local/bin` is in `$PATH`; if not, print a warning with instructions to add it (e.g., `export PATH="$HOME/.local/bin:$PATH"` in `~/.zshrc`)
 6. Copy `iterm2/claude-code.json` → `~/Library/Application Support/iTerm2/DynamicProfiles/` (copy, not symlink — see note above)
 7. Start tmux server if not running (`tmux start-server`)
 
@@ -199,7 +200,7 @@ cc-kill myapp
 - **Sibling directory worktrees:** `../<project>-<worktree>` avoids nesting worktrees inside the main repo and keeps paths predictable.
 - **Dashboard as shell loop:** No dependency on `watch` (not default on macOS). Simple `while/sleep` loop in the home session.
 - **Graceful Claude shutdown in cc-kill:** SIGTERM with timeout before force-killing, prevents `git worktree remove` failures from in-flight writes.
-- **Copy (not symlink) for dynamic profile:** iTerm2 DynamicProfiles does not reliably follow symlinks. Scripts are symlinked; the profile is copied.
+- **Copy (not symlink) for dynamic profile:** iTerm2 DynamicProfiles does not support symlinks (gnachman/iterm2#9107). The file must be physically present. Scripts are symlinked; the profile is copied.
 - **Symlink-based install for scripts:** Easy to update (just `git pull`), easy to uninstall, no copied scripts going stale.
 - **iTerm2-only requirement:** `cc` validates `$TERM_PROGRAM` is iTerm2 before proceeding. tmux `-CC` control protocol only works when the parent process is iTerm2.
 - **Single `-CC` client per session:** `cc` checks for existing `-CC` attachments to avoid duplicate iTerm2 windows for the same session. Attaching two `-CC` clients to one session causes unpredictable behavior.
