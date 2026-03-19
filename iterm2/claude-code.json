@@ -4,7 +4,7 @@
       "Name": "Claude Code",
       "Guid": "claude-code-tmux-home",
       "Custom Command": "Yes",
-      "Command": "tmux -CC new-session -A -s home -n dashboard",
+      "Command": "/usr/local/bin/tmux -CC new-session -A -s home -n dashboard",
       "Tags": ["claude", "tmux"],
       "Unlimited Scrollback": true,
       "Background Color": {
