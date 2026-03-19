@@ -1,0 +1,22 @@
+{
+  "Profiles": [
+    {
+      "Name": "Claude Code",
+      "Guid": "claude-code-tmux-home",
+      "Custom Command": "Yes",
+      "Command": "tmux -CC attach -t home 2>/dev/null || echo 'No home session found. Run cc <project-path> first to create one.'",
+      "Tags": ["claude", "tmux"],
+      "Unlimited Scrollback": true,
+      "Background Color": {
+        "Red Component": 0.05,
+        "Green Component": 0.05,
+        "Blue Component": 0.08,
+        "Alpha Component": 1.0,
+        "Color Space": "sRGB"
+      },
+      "Use Non-ASCII Font": false,
+      "Silence Bell": true,
+      "Close Sessions On End": true
+    }
+  ]
+}
