@@ -11,22 +11,22 @@ teardown() {
   teardown_common
 }
 
-@test "cc fails outside iTerm2" {
+@test "ccmux fails outside iTerm2" {
   export TERM_PROGRAM="Apple_Terminal"
-  run cc "$TEST_PROJECT"
+  run ccmux "$TEST_PROJECT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"iTerm2"* ]]
 }
 
-@test "cc fails with no arguments" {
-  run cc
+@test "ccmux fails with no arguments" {
+  run ccmux
   [ "$status" -ne 0 ]
   [[ "$output" == *"Usage"* ]]
 }
 
-@test "cc creates tmux session named after project directory" {
+@test "ccmux creates tmux session named after project directory" {
   # Use --no-attach to skip the tmux -CC attach (can't use in tests)
-  run cc --no-attach "$TEST_PROJECT"
+  run ccmux --no-attach "$TEST_PROJECT"
   [ "$status" -eq 0 ]
 
   local expected_session="${TEST_PREFIX}-proj"
@@ -34,8 +34,8 @@ teardown() {
   [ "$status" -eq 0 ]
 }
 
-@test "cc creates session with two panes" {
-  run cc --no-attach "$TEST_PROJECT"
+@test "ccmux creates session with two panes" {
+  run ccmux --no-attach "$TEST_PROJECT"
   [ "$status" -eq 0 ]
 
   local session="${TEST_PREFIX}-proj"
@@ -44,23 +44,23 @@ teardown() {
   [ "$pane_count" -eq 2 ]
 }
 
-@test "cc creates home session on first invocation" {
-  run cc --no-attach "$TEST_PROJECT"
+@test "ccmux creates home session on first invocation" {
+  run ccmux --no-attach "$TEST_PROJECT"
   [ "$status" -eq 0 ]
 
   run tmux has-session -t "home"
   [ "$status" -eq 0 ]
 }
 
-@test "cc is idempotent — second call does not create duplicate windows" {
-  run cc --no-attach "$TEST_PROJECT"
+@test "ccmux is idempotent — second call does not create duplicate windows" {
+  run ccmux --no-attach "$TEST_PROJECT"
   [ "$status" -eq 0 ]
 
   local session="${TEST_PREFIX}-proj"
   local window_count_before
   window_count_before=$(tmux list-windows -t "$session" | wc -l | tr -d ' ')
 
-  run cc --no-attach "$TEST_PROJECT"
+  run ccmux --no-attach "$TEST_PROJECT"
   [ "$status" -eq 0 ]
 
   local window_count_after
@@ -68,8 +68,8 @@ teardown() {
   [ "$window_count_before" -eq "$window_count_after" ]
 }
 
-@test "cc with worktree creates git worktree and new window" {
-  run cc --no-attach "$TEST_PROJECT" test-feature
+@test "ccmux with worktree creates git worktree and new window" {
+  run ccmux --no-attach "$TEST_PROJECT" test-feature
   [ "$status" -eq 0 ]
 
   # Check worktree exists
@@ -81,15 +81,15 @@ teardown() {
   [[ "$output" == *"test-feature"* ]]
 }
 
-@test "cc with worktree is idempotent" {
-  run cc --no-attach "$TEST_PROJECT" test-feature
+@test "ccmux with worktree is idempotent" {
+  run ccmux --no-attach "$TEST_PROJECT" test-feature
   [ "$status" -eq 0 ]
 
   local session="${TEST_PREFIX}-proj"
   local window_count_before
   window_count_before=$(tmux list-windows -t "$session" | wc -l | tr -d ' ')
 
-  run cc --no-attach "$TEST_PROJECT" test-feature
+  run ccmux --no-attach "$TEST_PROJECT" test-feature
   [ "$status" -eq 0 ]
 
   local window_count_after

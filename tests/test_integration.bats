@@ -18,29 +18,29 @@ teardown() {
   local session="${TEST_PREFIX}-integ"
 
   # 1. Create session
-  run cc --no-attach "$TEST_PROJECT"
+  run ccmux --no-attach "$TEST_PROJECT"
   [ "$status" -eq 0 ]
   run tmux has-session -t "$session"
   [ "$status" -eq 0 ]
 
   # 2. Add worktree
-  run cc --no-attach "$TEST_PROJECT" feat-x
+  run ccmux --no-attach "$TEST_PROJECT" feat-x
   [ "$status" -eq 0 ]
   [ -d "${TEST_PROJECT}/../${session}-feat-x" ]
 
   # 3. List sessions
-  run cc-list
+  run ccmux-list
   [ "$status" -eq 0 ]
   [[ "$output" == *"$session"* ]]
   [[ "$output" == *"feat-x"* ]]
 
   # 4. Kill worktree window
-  run cc-kill --yes "$session" feat-x
+  run ccmux-kill --yes "$session" feat-x
   [ "$status" -eq 0 ]
   [ ! -d "${TEST_PROJECT}/../${session}-feat-x" ]
 
   # 5. Kill session
-  run cc-kill --yes "$session"
+  run ccmux-kill --yes "$session"
   [ "$status" -eq 0 ]
   run tmux has-session -t "$session"
   [ "$status" -ne 0 ]

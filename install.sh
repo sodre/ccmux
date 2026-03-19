@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# install.sh — install cc tools, tmux config, and iTerm2 profile
+# install.sh — install ccmux tools, tmux config, and iTerm2 profile
 #
 # Usage: install.sh [--dry-run]
 
@@ -72,7 +72,7 @@ fi
 
 # --- Step 4: Symlink scripts ---
 mkdir -p "$BIN_DIR"
-for script in cc cc-list cc-kill cc-dashboard; do
+for script in ccmux ccmux-list ccmux-kill ccmux-dashboard; do
   target="$BIN_DIR/$script"
   if [[ "$DRY_RUN" == false ]]; then
     ln -sf "$SCRIPT_DIR/bin/$script" "$target"
@@ -111,4 +111,4 @@ fi
 
 echo ""
 info "Installation complete! Open a new iTerm2 window with the 'Claude Code' profile for the dashboard."
-info "Run 'cc <project-path>' to start a Claude Code session."
+info "Run 'ccmux <project-path>' to start a Claude Code session."

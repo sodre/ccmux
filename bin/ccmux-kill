@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
-# cc-kill — gracefully teardown Claude Code sessions or windows
+# ccmux-kill — gracefully teardown Claude Code sessions or windows
 #
-# Usage: cc-kill [--yes] <session> [window]
+# Usage: ccmux-kill [--yes] <session> [window]
 
 set -euo pipefail
 
@@ -13,7 +13,7 @@ if [[ "${1:-}" == "--yes" ]]; then
 fi
 
 if [[ $# -lt 1 ]]; then
-  echo "Usage: cc-kill [--yes] <session> [window]" >&2
+  echo "Usage: ccmux-kill [--yes] <session> [window]" >&2
   exit 1
 fi
 

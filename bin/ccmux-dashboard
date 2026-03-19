@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# cc-dashboard — display status of all tmux sessions with Claude Code info
+# ccmux-dashboard — display status of all tmux sessions with Claude Code info
 
 set -euo pipefail
 

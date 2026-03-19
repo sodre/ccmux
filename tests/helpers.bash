@@ -8,7 +8,7 @@ TEST_TMP="$BATS_TEST_TMPDIR"
 
 setup_common() {
   export PATH="$BATS_TEST_DIRNAME/../bin:$PATH"
-  # Override TERM_PROGRAM so cc thinks it's in iTerm2
+  # Override TERM_PROGRAM so ccmux thinks it's in iTerm2
   export TERM_PROGRAM="iTerm.app"
 }
 

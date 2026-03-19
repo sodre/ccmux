@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# cc — create or attach to a Claude Code tmux session
+# ccmux — create or attach to a Claude Code tmux session
 #
 # Usage: cc [--no-attach] <project-path> [worktree-name]
 
@@ -33,7 +33,7 @@ SESSION_NAME="${PROJECT_PATH:t}"  # basename
 if ! tmux has-session -t "home" 2>/dev/null; then
   SCRIPT_DIR="${0:A:h}"
   tmux new-session -d -s "home" -n "dashboard" -x 200 -y 50
-  tmux send-keys -t "home:dashboard" "while true; do clear; $SCRIPT_DIR/cc-dashboard; sleep 30; done" Enter
+  tmux send-keys -t "home:dashboard" "while true; do clear; $SCRIPT_DIR/ccmux-dashboard; sleep 30; done" Enter
 fi
 
 # --- Helper: check if -CC client is attached to session ---

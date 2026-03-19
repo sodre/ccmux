@@ -10,17 +10,17 @@ teardown() {
   teardown_common
 }
 
-@test "cc-list outputs same info as cc-dashboard" {
+@test "ccmux-list outputs same info as ccmux-dashboard" {
   local session="${TEST_PREFIX}-list"
   tmux new-session -d -s "$session" -x 80 -y 24
-  run cc-list
+  run ccmux-list
   [ "$status" -eq 0 ]
   [[ "${lines[0]}" == *"SESSION"* ]]
   [[ "$output" == *"$session"* ]]
 }
 
-@test "cc-list exits 0 with no sessions" {
+@test "ccmux-list exits 0 with no sessions" {
   teardown_common
-  run cc-list
+  run ccmux-list
   [ "$status" -eq 0 ]
 }
