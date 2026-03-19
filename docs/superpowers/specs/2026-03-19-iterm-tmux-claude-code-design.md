@@ -22,6 +22,20 @@ iTerm2's tmux `-CC` integration attaches **one iTerm2 window per tmux session**.
 - Within that window, tmux windows appear as **native iTerm2 tabs**
 - Switching between projects means switching between iTerm2 windows (Cmd+`)
 
+### Prerequisite: iTerm2 tmux window restore preference
+
+iTerm2 must be configured to restore tmux windows as **tabs in the current window** (not as separate native windows, which is the default). Without this, each tmux window within a session would open as a separate iTerm2 window instead of a tab.
+
+The `install.sh` script configures this automatically:
+```
+defaults write com.googlecode.iterm2 OpenTmuxWindowsIn -int 2
+```
+(Value `2` = tabs in the attaching window.)
+
+### Requirement: `cc` must be run from within iTerm2
+
+The `tmux -CC attach` command communicates with its parent iTerm2 process via the control protocol. Running `cc` from Terminal.app, a script, or any non-iTerm2 context will render raw escape sequences instead of opening an iTerm2 window. The `cc` script validates that `$TERM_PROGRAM` is `iTerm.app` and exits with an error if not.
+
 ### Session Layout
 
 ```
@@ -84,8 +98,8 @@ Main entry point for creating and attaching to sessions.
 - **No worktree-name:** Opens the main branch at the project path
   1. Derives session name from directory name
   2. If session doesn't exist: creates tmux session, explicitly splits into two panes (claude | shell), creates "home" session if needed, opens iTerm2 via `tmux -CC attach`
-  3. If session exists and already has a "main" window: attaches to the existing session via `tmux -CC attach` (idempotent — does not create duplicate windows)
-  4. If session exists but no "main" window: creates the window with split, then attaches
+  3. If session exists and already has a "main" window: checks if a `-CC` client is already attached to this session. If yes, prints a message and exits (the iTerm2 window already exists — user can Cmd+` to it). If no `-CC` client is attached, attaches via `tmux -CC attach`.
+  4. If session exists but no "main" window: creates the window with split, then attaches (same `-CC` client check as above)
 - **With worktree-name:** Opens an isolated worktree
   1. Creates git worktree at `../<project>-<worktree-name>` (sibling directory) if it doesn't already exist
   2. Creates a new window in the project's session, named after the worktree
@@ -104,7 +118,7 @@ Displays a table of all running Claude Code sessions:
 
 Clean teardown with graceful shutdown:
 - **Without window:** Sends SIGTERM to all Claude Code processes in the session, waits up to 5 seconds for graceful exit, then kills the entire tmux session (with confirmation prompt)
-- **With window:** Sends SIGTERM to Claude Code in that window's pane, waits up to 5 seconds, kills the window, then runs `git worktree remove` on the associated path if it was a worktree. Uses `--force` if the worktree has modifications (with a warning to the user).
+- **With window:** Sends SIGTERM to Claude Code in that window's pane, waits up to 5 seconds, kills the window, then runs `git worktree remove` on the associated path if it was a worktree. Uses `--force` if the worktree has modifications (with a warning). If the worktree is locked, detects this via `git worktree list --porcelain` and warns the user to unlock it manually rather than force-removing a locked worktree.
 
 #### `cc-dashboard`
 
@@ -128,10 +142,13 @@ A JSON profile installed to `~/Library/Application Support/iTerm2/DynamicProfile
 ### 4. Installation (`install.sh`)
 
 Steps:
-1. Symlink `tmux.conf` → `~/.tmux.conf` (backs up existing if present)
-2. Symlink `bin/cc`, `bin/cc-list`, `bin/cc-kill`, `bin/cc-dashboard` → `~/.local/bin/`
-3. Copy `iterm2/claude-code.json` → `~/Library/Application Support/iTerm2/DynamicProfiles/` (copy, not symlink — see note above)
-4. Verify dependencies: `tmux`, `claude`, `git`
+1. Verify dependencies: `tmux`, `claude`, `git`
+2. Verify running inside iTerm2 (`$TERM_PROGRAM` = `iTerm.app`)
+3. Configure iTerm2 tmux preference: `defaults write com.googlecode.iterm2 OpenTmuxWindowsIn -int 2`
+4. Symlink `tmux.conf` → `~/.tmux.conf` (backs up existing if present)
+5. Symlink `bin/cc`, `bin/cc-list`, `bin/cc-kill`, `bin/cc-dashboard` → `~/.local/bin/`
+6. Copy `iterm2/claude-code.json` → `~/Library/Application Support/iTerm2/DynamicProfiles/` (copy, not symlink — see note above)
+7. Start tmux server if not running (`tmux start-server`)
 
 Uninstall: remove symlinks and dynamic profile. Nothing invasive.
 
@@ -184,3 +201,6 @@ cc-kill myapp
 - **Graceful Claude shutdown in cc-kill:** SIGTERM with timeout before force-killing, prevents `git worktree remove` failures from in-flight writes.
 - **Copy (not symlink) for dynamic profile:** iTerm2 DynamicProfiles does not reliably follow symlinks. Scripts are symlinked; the profile is copied.
 - **Symlink-based install for scripts:** Easy to update (just `git pull`), easy to uninstall, no copied scripts going stale.
+- **iTerm2-only requirement:** `cc` validates `$TERM_PROGRAM` is iTerm2 before proceeding. tmux `-CC` control protocol only works when the parent process is iTerm2.
+- **Single `-CC` client per session:** `cc` checks for existing `-CC` attachments to avoid duplicate iTerm2 windows for the same session. Attaching two `-CC` clients to one session causes unpredictable behavior.
+- **No force-remove of locked worktrees:** `cc-kill` warns and exits rather than double-forcing removal of locked worktrees, since locks are intentional.
