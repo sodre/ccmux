@@ -14,7 +14,7 @@ if ! tmux list-sessions &>/dev/null; then
 fi
 
 tmux list-sessions -F '#{session_name}' | while read -r session; do
-  tmux list-windows -t "$session" -F '#{window_name} #{pane_id}' | while read -r wname pane_id; do
+  tmux list-windows -t "$session" -F '#{window_name}|#{pane_id}' | while IFS='|' read -r wname pane_id; do
     # Get the working directory of the first pane
     pane_path=$(tmux display-message -t "$pane_id" -p '#{pane_current_path}' 2>/dev/null || echo "?")
 

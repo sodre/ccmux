@@ -110,6 +110,15 @@ if [[ -z "$WINDOW" ]]; then
     [[ "$answer" =~ ^[Yy]$ ]] || exit 0
   fi
 
+  # Collect worktree paths before killing anything
+  worktree_paths=()
+  tmux list-windows -t "$SESSION" -F '#{window_name}' | while read -r wname; do
+    wt_path=$(get_worktree_path "$SESSION" "$wname" 2>/dev/null) || true
+    if [[ -n "$wt_path" ]]; then
+      worktree_paths+=("$wt_path")
+    fi
+  done
+
   # Graceful stop all panes
   tmux list-panes -s -t "$SESSION" -F '#{pane_id}' | while read -r pane; do
     graceful_stop_pane "$pane"
@@ -120,6 +129,13 @@ if [[ -z "$WINDOW" ]]; then
 
   tmux kill-session -t "$SESSION"
   echo "Session '$SESSION' killed."
+
+  # Clean up worktrees
+  for wt_path in "${worktree_paths[@]}"; do
+    if [[ -d "$wt_path" ]]; then
+      remove_worktree "$wt_path" || true
+    fi
+  done
 else
   # --- Kill specific window ---
   if ! tmux list-windows -t "$SESSION" -F '#{window_name}' | grep -q "^${WINDOW}$"; then

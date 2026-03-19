@@ -69,8 +69,9 @@ create_split_window() {
   fi
 
   if [[ "$is_initial" == true ]]; then
-    # Rename the default window created by new-session (index 0)
-    tmux rename-window -t "${session}:0" "$window_name"
+    # Rename the default window created by new-session
+    # Use ${session}: to target the active window (avoids base-index mismatch)
+    tmux rename-window -t "${session}" "$window_name"
   else
     # Create a new window
     tmux new-window -t "$session" -n "$window_name" -c "$work_dir"
