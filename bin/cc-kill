@@ -1,0 +1,154 @@
+#!/usr/bin/env zsh
+# cc-kill — gracefully teardown Claude Code sessions or windows
+#
+# Usage: cc-kill [--yes] <session> [window]
+
+set -euo pipefail
+
+# --- Flags ---
+AUTO_CONFIRM=false
+if [[ "${1:-}" == "--yes" ]]; then
+  AUTO_CONFIRM=true
+  shift
+fi
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: cc-kill [--yes] <session> [window]" >&2
+  exit 1
+fi
+
+SESSION="$1"
+WINDOW="${2:-}"
+
+# --- Validate session exists ---
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+  echo "Error: session '$SESSION' not found." >&2
+  exit 1
+fi
+
+# --- Helper: send SIGTERM to claude processes in a pane ---
+graceful_stop_pane() {
+  local target="$1"
+  local pane_pid
+  pane_pid=$(tmux display-message -t "$target" -p '#{pane_pid}' 2>/dev/null) || return 0
+  # Find claude child processes
+  local claude_pids
+  claude_pids=$(pgrep -P "$pane_pid" -f "claude" 2>/dev/null) || return 0
+  for pid in ${(f)claude_pids}; do
+    kill -TERM "$pid" 2>/dev/null || true
+  done
+}
+
+# --- Helper: wait for claude to exit ---
+wait_for_claude() {
+  local target="$1"
+  local timeout=5
+  local i=0
+  while (( i < timeout )); do
+    local pane_pid
+    pane_pid=$(tmux display-message -t "$target" -p '#{pane_pid}' 2>/dev/null) || return 0
+    if ! pgrep -P "$pane_pid" -f "claude" &>/dev/null; then
+      return 0
+    fi
+    sleep 1
+    (( i++ ))
+  done
+}
+
+# --- Helper: find worktree path for a window ---
+get_worktree_path() {
+  local session="$1"
+  local window="$2"
+  local pane_path
+  pane_path=$(tmux display-message -t "${session}:${window}.0" -p '#{pane_current_path}' 2>/dev/null) || return 1
+
+  # Check if this path is a git worktree (not the main repo)
+  local git_common_dir
+  git_common_dir=$(git -C "$pane_path" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
+  local git_dir
+  git_dir=$(git -C "$pane_path" rev-parse --path-format=absolute --git-dir 2>/dev/null) || return 1
+
+  # If git-dir != git-common-dir, this is a worktree
+  if [[ "$git_dir" != "$git_common_dir" ]]; then
+    echo "$pane_path"
+    return 0
+  fi
+  return 1
+}
+
+# --- Helper: remove worktree safely ---
+remove_worktree() {
+  local worktree_path="$1"
+
+  # Find the main repo root (git-common-dir points to main .git)
+  local main_git_dir
+  main_git_dir=$(git -C "$worktree_path" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
+  local main_repo="${main_git_dir%/.git}"
+
+  # Check if locked
+  local porcelain
+  porcelain=$(git -C "$main_repo" worktree list --porcelain 2>/dev/null)
+  if echo "$porcelain" | grep -A1 "worktree ${worktree_path}" | grep -q "^locked"; then
+    echo "Warning: worktree at '$worktree_path' is locked. Unlock it manually with:"
+    echo "  git worktree unlock '$worktree_path'"
+    return 1
+  fi
+
+  # Try normal remove first, then --force if dirty
+  # Must run from main repo, not from the worktree being removed
+  if ! git -C "$main_repo" worktree remove "$worktree_path" 2>/dev/null; then
+    echo "Warning: worktree has modifications. Force removing..."
+    git -C "$main_repo" worktree remove --force "$worktree_path"
+  fi
+}
+
+if [[ -z "$WINDOW" ]]; then
+  # --- Kill entire session ---
+  if [[ "$AUTO_CONFIRM" == false ]]; then
+    echo -n "Kill session '$SESSION' and all its windows? [y/N] "
+    read -r answer
+    [[ "$answer" =~ ^[Yy]$ ]] || exit 0
+  fi
+
+  # Graceful stop all panes
+  tmux list-panes -s -t "$SESSION" -F '#{pane_id}' | while read -r pane; do
+    graceful_stop_pane "$pane"
+  done
+
+  # Brief wait
+  sleep 2
+
+  tmux kill-session -t "$SESSION"
+  echo "Session '$SESSION' killed."
+else
+  # --- Kill specific window ---
+  if ! tmux list-windows -t "$SESSION" -F '#{window_name}' | grep -q "^${WINDOW}$"; then
+    echo "Error: window '$WINDOW' not found in session '$SESSION'." >&2
+    exit 1
+  fi
+
+  if [[ "$AUTO_CONFIRM" == false ]]; then
+    echo -n "Kill window '$WINDOW' in session '$SESSION'? [y/N] "
+    read -r answer
+    [[ "$answer" =~ ^[Yy]$ ]] || exit 0
+  fi
+
+  # Try to get worktree path before killing the window
+  worktree_path=""
+  worktree_path=$(get_worktree_path "$SESSION" "$WINDOW") || true
+
+  # Graceful stop claude in this window's panes
+  tmux list-panes -t "${SESSION}:${WINDOW}" -F '#{pane_id}' | while read -r pane; do
+    graceful_stop_pane "$pane"
+  done
+  wait_for_claude "${SESSION}:${WINDOW}.0"
+
+  # Kill the window
+  tmux kill-window -t "${SESSION}:${WINDOW}"
+  echo "Window '$WINDOW' in session '$SESSION' killed."
+
+  # Clean up worktree if applicable
+  if [[ -n "$worktree_path" ]] && [[ -d "$worktree_path" ]]; then
+    remove_worktree "$worktree_path" || true
+  fi
+fi
