@@ -60,7 +60,9 @@ get_worktree_path() {
   local session="$1"
   local window="$2"
   local pane_path
-  pane_path=$(tmux display-message -t "${session}:${window}.0" -p '#{pane_current_path}' 2>/dev/null) || return 1
+  # Get the first pane's path (avoid hardcoding pane index)
+  pane_path=$(tmux list-panes -t "${session}:${window}" -F '#{pane_current_path}' 2>/dev/null | head -1) || return 1
+  [[ -n "$pane_path" ]] || return 1
 
   # Check if this path is a git worktree (not the main repo)
   local git_common_dir
@@ -157,7 +159,10 @@ else
   tmux list-panes -t "${SESSION}:${WINDOW}" -F '#{pane_id}' | while read -r pane; do
     graceful_stop_pane "$pane"
   done
-  wait_for_claude "${SESSION}:${WINDOW}.0"
+  # Wait for claude in the first pane
+  local first_pane
+  first_pane=$(tmux list-panes -t "${SESSION}:${WINDOW}" -F '#{pane_id}' 2>/dev/null | head -1)
+  [[ -n "$first_pane" ]] && wait_for_claude "$first_pane"
 
   # Kill the window
   tmux kill-window -t "${SESSION}:${WINDOW}"

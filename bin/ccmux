@@ -1,30 +1,55 @@
 #!/usr/bin/env zsh
 # ccmux — create or attach to a Claude Code tmux session
 #
-# Usage: cc [--no-attach] <project-path> [worktree-name]
+# Usage: ccmux [--no-attach] <project-path> [worktree-name]
 
 set -euo pipefail
 
-# --- Flags ---
+# --- Argument parsing ---
 NO_ATTACH=false
-if [[ "${1:-}" == "--no-attach" ]]; then
-  NO_ATTACH=true
-  shift
-fi
+POSITIONAL=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --no-attach)
+      NO_ATTACH=true
+      shift
+      ;;
+    -h|--help)
+      echo "Usage: ccmux [--no-attach] <project-path> [worktree-name]"
+      echo ""
+      echo "Create or attach to a Claude Code tmux session."
+      echo ""
+      echo "Options:"
+      echo "  --no-attach  Create session without attaching via tmux -CC"
+      echo "  -h, --help   Show this help"
+      exit 0
+      ;;
+    -*)
+      echo "Error: unknown option '$1'" >&2
+      echo "Usage: ccmux [--no-attach] <project-path> [worktree-name]" >&2
+      exit 1
+      ;;
+    *)
+      POSITIONAL+=("$1")
+      shift
+      ;;
+  esac
+done
 
 # --- Validation ---
-if [[ $# -lt 1 ]]; then
-  echo "Usage: cc [--no-attach] <project-path> [worktree-name]" >&2
+if [[ ${#POSITIONAL[@]} -lt 1 ]]; then
+  echo "Usage: ccmux [--no-attach] <project-path> [worktree-name]" >&2
   exit 1
 fi
 
 if [[ "$TERM_PROGRAM" != "iTerm.app" ]] && [[ "$NO_ATTACH" == false ]]; then
-  echo "Error: cc must be run from within iTerm2 (tmux -CC requires iTerm2)." >&2
+  echo "Error: ccmux must be run from within iTerm2 (tmux -CC requires iTerm2)." >&2
   exit 1
 fi
 
-PROJECT_PATH="${1:A}"  # Resolve to absolute path
-WORKTREE_NAME="${2:-}"
+PROJECT_PATH="${POSITIONAL[1]:A}"  # Resolve to absolute path
+WORKTREE_NAME="${POSITIONAL[2]:-}"
 
 # --- Derive session name ---
 SESSION_NAME="${PROJECT_PATH:t}"  # basename
@@ -78,14 +103,19 @@ create_split_window() {
   fi
 
   # Split: left pane = claude, right pane = shell
+  # After split, the new (right) pane is active. Get pane IDs to avoid hardcoding indices.
+  local left_pane
+  left_pane=$(tmux display-message -t "${session}:${window_name}" -p '#{pane_id}')
   tmux split-window -t "${session}:${window_name}" -h -c "$work_dir"
+  local right_pane
+  right_pane=$(tmux display-message -t "${session}:${window_name}" -p '#{pane_id}')
 
-  # Left pane (pane 0) runs claude, right pane (pane 1) is shell
-  tmux send-keys -t "${session}:${window_name}.0" "cd ${(q)work_dir} && claude" Enter
-  tmux send-keys -t "${session}:${window_name}.1" "cd ${(q)work_dir}" Enter
+  # Left pane runs claude, right pane is shell
+  tmux send-keys -t "$left_pane" "cd ${(q)work_dir} && claude" Enter
+  tmux send-keys -t "$right_pane" "cd ${(q)work_dir}" Enter
 
   # Focus left pane
-  tmux select-pane -t "${session}:${window_name}.0"
+  tmux select-pane -t "$left_pane"
 }
 
 # --- Main logic ---
